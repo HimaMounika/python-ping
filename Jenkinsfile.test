@@ -1,0 +1,78 @@
+// main script block
+// could use eg. params.parallel build parameter to choose parallel/serial
+def runParallel = true
+def buildStages
+
+node('master') {
+        stage('Checkout') {
+                checkout scm
+        }
+stage('Serial'){
+   def config = readJSON file:'server.json'
+   def input_list = config.General.TestType.split('/')
+
+    for (name in input_list ) {
+      def n = "${name}"
+      serialbuild(n)
+    }
+
+}
+
+
+
+  stage('Parallel') {
+    // Set up List<Map<String,Closure>> describing the builds
+    buildStages = prepareBuildStages()
+    println("Initialised pipeline.")
+  }
+
+
+  for (builds in buildStages) {
+    if (runParallel) {
+      parallel(builds)
+    } else {
+      // run serially (nb. Map is unordered! )
+      for (build in builds.values()) {
+        build.call()
+      }
+    }
+  }
+
+  stage('Finish') {
+      println('Build complete.')
+  }
+}
+
+// Create List of build stages to suit
+def prepareBuildStages() {
+   def config = readJSON file:'server.json'
+   def input_list = config.General.TestType.split('/')
+
+  def buildList = []
+  for (i=1; i<5; i++) {
+    def buildStages = [:]
+    for (name in input_list ) {
+      def n = "${name}"
+      buildStages.put(n, prepareOneBuildStage(n))
+    }
+    buildList.add(buildStages)
+  }
+  return buildList
+}
+
+def prepareOneBuildStage(String name) {
+  return {
+    stage("Build stage:${name}") {
+      println("Building ${name}")
+      sh(script:'sleep 5', returnStatus:true)
+    }
+  }
+}
+
+def serialbuild(String name) {
+    stage("Build stage:${name}") {
+      println("Building ${name}")
+      sh(script:'sleep 5')
+    }
+}
+
